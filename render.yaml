@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: izmailovo-inbox-bot
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
+    disk:
+      name: bot-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_CHAT_ID
+        value: "-1006075820573"
+      - key: CHANNEL_URL
+        value: https://t.me/podslushano_izmayolovo
+      - key: DATA_DIR
+        value: /var/data

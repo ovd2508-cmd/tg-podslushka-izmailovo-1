@@ -1,0 +1,594 @@
+:root {
+    color-scheme: light dark;
+
+    --page-bg: var(--tg-theme-bg-color, #f2f4f8);
+    --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #182230);
+    --muted: var(--tg-theme-hint-color, #687587);
+    --accent: var(--tg-theme-button-color, #2678f3);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --link: var(--tg-theme-link-color, #2678f3);
+
+    --border: rgba(128, 128, 128, 0.22);
+    --soft-bg: rgba(128, 128, 128, 0.08);
+    --focus: #5498ff;
+    --success: #17834b;
+    --error: #bb3030;
+
+    --radius: 20px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    min-height: 100%;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    min-width: 280px;
+    min-height: 100vh;
+    margin: 0;
+
+    background: var(--page-bg);
+    color: var(--text);
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Arial,
+        sans-serif;
+
+    font-size: 15px;
+    line-height: 1.5;
+
+    overflow-wrap: anywhere;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+button,
+a,
+label {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+    touch-action: manipulation;
+}
+
+a {
+    color: var(--link);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 4px;
+}
+
+.app {
+    width: 100%;
+    max-width: 620px;
+    margin: 0 auto;
+
+    padding: 24px 16px 36px;
+
+    padding-top: max(
+        24px,
+        env(safe-area-inset-top, 0px),
+        var(--tg-content-safe-area-inset-top, 0px)
+    );
+
+    padding-right: max(
+        16px,
+        env(safe-area-inset-right, 0px),
+        var(--tg-content-safe-area-inset-right, 0px)
+    );
+
+    padding-bottom: max(
+        36px,
+        env(safe-area-inset-bottom, 0px),
+        var(--tg-content-safe-area-inset-bottom, 0px)
+    );
+
+    padding-left: max(
+        16px,
+        env(safe-area-inset-left, 0px),
+        var(--tg-content-safe-area-inset-left, 0px)
+    );
+}
+
+.page-header {
+    margin-bottom: 20px;
+}
+
+.eyebrow {
+    display: block;
+    margin-bottom: 8px;
+
+    color: var(--muted);
+
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.4;
+}
+
+h1,
+h2,
+p {
+    margin-top: 0;
+}
+
+h1 {
+    margin-bottom: 10px;
+
+    font-size: clamp(27px, 7vw, 36px);
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+}
+
+h2 {
+    margin-bottom: 10px;
+
+    font-size: 20px;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+}
+
+.subtitle {
+    max-width: 44ch;
+    margin-bottom: 0;
+
+    color: var(--muted);
+    font-size: 15px;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.card {
+    margin-bottom: 16px;
+    padding: 20px;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+
+    background: var(--card-bg);
+}
+
+.card > :last-child {
+    margin-bottom: 0;
+}
+
+.section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.section-heading > div {
+    min-width: 0;
+}
+
+.section-heading h2 {
+    margin-bottom: 0;
+}
+
+.section-heading .eyebrow {
+    margin-bottom: 5px;
+}
+
+/* Уведомления.
+   JavaScript может задавать class="status error"
+   либо data-type="error" — поддерживаются оба варианта. */
+
+.status {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background: var(--soft-bg);
+    color: var(--text);
+
+    font-size: 14px;
+}
+
+.status:empty {
+    display: none;
+}
+
+.status.error,
+.status--error,
+.status[data-type="error"] {
+    border-color: var(--error);
+}
+
+.status.success,
+.status--success,
+.status[data-type="success"] {
+    border-color: var(--success);
+}
+
+.status.loading,
+.status--loading,
+.status[data-type="loading"] {
+    color: var(--muted);
+}
+
+/* Кнопки. */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 46px;
+    padding: 11px 17px;
+
+    border: 1px solid transparent;
+    border-radius: 13px;
+
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+    text-decoration: none;
+
+    cursor: pointer;
+
+    transition:
+        opacity 0.15s ease,
+        transform 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.button-primary {
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+.button-secondary {
+    border-color: var(--border);
+
+    background: var(--soft-bg);
+    color: var(--text);
+}
+
+.button:not(:disabled):active {
+    transform: translateY(1px);
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#save-profile {
+    width: 100%;
+    margin-top: 14px;
+}
+
+#refresh-top {
+    flex-shrink: 0;
+
+    min-height: 40px;
+    padding: 9px 12px;
+
+    font-size: 13px;
+}
+
+/* Выбор публичного профиля. */
+
+.profile-options {
+    display: grid;
+    gap: 10px;
+
+    min-width: 0;
+    margin: 16px 0 0;
+    padding: 0;
+
+    border: 0;
+}
+
+.profile-options:disabled {
+    opacity: 0.6;
+}
+
+.choice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    min-height: 76px;
+    padding: 14px;
+
+    border: 1px solid var(--border);
+    border-radius: 14px;
+
+    background: var(--soft-bg);
+
+    cursor: pointer;
+
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.choice:focus-within {
+    border-color: var(--accent);
+}
+
+.choice:has(input:checked) {
+    border-color: var(--accent);
+}
+
+.choice input[type="radio"] {
+    flex-shrink: 0;
+
+    width: 20px;
+    height: 20px;
+    margin: 0;
+
+    accent-color: var(--accent);
+}
+
+.choice-content {
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+    min-width: 0;
+}
+
+.choice-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.choice-description {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.privacy-note {
+    margin-top: 16px;
+    margin-bottom: 0;
+
+    color: var(--muted);
+
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* Личный счётчик. */
+
+.personal-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 20px;
+}
+
+.personal-stats > div {
+    min-width: 0;
+}
+
+.personal-stats h2 {
+    margin-bottom: 6px;
+    font-size: 18px;
+}
+
+.personal-stats p {
+    margin-bottom: 0;
+    font-size: 13px;
+}
+
+.stat-value {
+    flex-shrink: 0;
+
+    color: var(--accent);
+
+    font-size: 38px;
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: -0.04em;
+}
+
+/* Рейтинг.
+   app.js создаёт строки с этими классами. */
+
+.rating-list {
+    display: grid;
+    gap: 0;
+
+    margin: 0;
+    padding: 0;
+
+    list-style: none;
+}
+
+.rating-item {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+
+    gap: 12px;
+    padding: 14px 0;
+
+    border-bottom: 1px solid var(--border);
+}
+
+.rating-item:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.rating-position {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+
+    border-radius: 10px;
+
+    background: var(--soft-bg);
+    color: var(--muted);
+
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.rating-item:first-child .rating-position {
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+.rating-name {
+    min-width: 0;
+
+    font-size: 14px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.rating-name.is-anonymous {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.rating-count {
+    min-width: 28px;
+
+    color: var(--text);
+
+    font-size: 16px;
+    font-weight: 700;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.empty-state {
+    margin: 0;
+    padding: 22px 12px;
+
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+
+    color: var(--muted);
+
+    font-size: 14px;
+    text-align: center;
+}
+
+/* Подвал. */
+
+.page-footer {
+    padding: 4px 0 0;
+    text-align: center;
+}
+
+.page-footer .button {
+    width: 100%;
+}
+
+.page-footer p {
+    margin: 16px 8px 0;
+    font-size: 12px;
+}
+
+/* Текст для программ экранного доступа. */
+
+.sr-only {
+    position: absolute;
+
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+
+    border: 0;
+}
+
+/* Небольшие экраны. */
+
+@media (max-width: 360px) {
+    .card {
+        padding: 16px;
+    }
+
+    .section-heading {
+        gap: 10px;
+    }
+
+    .personal-stats {
+        gap: 12px;
+    }
+
+    .stat-value {
+        font-size: 32px;
+    }
+
+    .rating-item {
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 9px;
+    }
+
+    .rating-position {
+        width: 28px;
+        height: 28px;
+    }
+}
+
+/* Тёмная тема вне Telegram либо до получения его темы. */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --page-bg: var(--tg-theme-bg-color, #111722);
+        --card-bg: var(--tg-theme-secondary-bg-color, #1b2432);
+        --text: var(--tg-theme-text-color, #eef2f8);
+        --muted: var(--tg-theme-hint-color, #a1adbf);
+        --border: rgba(180, 190, 210, 0.2);
+        --soft-bg: rgba(180, 190, 210, 0.07);
+        --success: #4bb981;
+        --error: #f07878;
+    }
+}
+
+/* Учитываем настройку уменьшения анимации. */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+    }
+}
