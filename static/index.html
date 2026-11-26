@@ -17,86 +17,164 @@
       background: #f2f4f7;
       color: #111;
       min-height: 100vh;
+    }
+
+    .header {
+      background: #2481cc;
+      color: #fff;
+      padding: 20px 16px 16px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+    }
+
+    .header p {
+      font-size: 13px;
+      opacity: 0.85;
+      margin-top: 4px;
+    }
+
+    .tabs {
+      display: flex;
+      background: #fff;
+      border-bottom: 1px solid #e3e7ec;
+    }
+
+    .tab {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      padding: 14px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #666;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      color: #2481cc;
+      border-bottom: 3px solid #2481cc;
+    }
+
+    .screen {
+      display: none;
       padding: 16px;
+    }
+
+    .screen.active {
+      display: block;
     }
 
     .card {
       background: #fff;
-      border-radius: 18px;
-      padding: 18px;
-      margin-bottom: 14px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
 
-    h1 {
-      font-size: 22px;
-      margin-bottom: 8px;
-    }
-
-    p {
-      font-size: 15px;
-      line-height: 1.45;
-      color: #444;
-    }
-
-    .button {
-      display: block;
-      width: 100%;
-      border: 0;
-      border-radius: 14px;
-      padding: 15px;
+    .title {
       font-size: 16px;
-      font-weight: 600;
-      margin-top: 10px;
-      cursor: pointer;
+      font-weight: 700;
+      margin-bottom: 6px;
     }
 
-    .primary {
-      background: #2481cc;
-      color: #fff;
+    .text {
+      font-size: 14px;
+      line-height: 1.45;
+      color: #555;
     }
 
-    .secondary {
-      background: #eef2f6;
-      color: #2481cc;
-    }
-
-    .status {
-      font-size: 13px;
-      color: #777;
-      margin-top: 10px;
+    .empty {
       text-align: center;
+      color: #777;
+      font-size: 14px;
+      padding: 24px 10px;
+    }
+
+    .profile-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid #eef1f5;
+    }
+
+    .profile-row:last-child {
+      border-bottom: 0;
+    }
+
+    .value {
+      color: #2481cc;
+      font-weight: 600;
     }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="header">
     <h1>Подслушано Измайлово</h1>
-    <p>
-      Анонимная предложка района: рассказывай о событиях, проблемах,
-      историях и интересных находках.
-    </p>
+    <p>Мини-приложение района</p>
   </div>
 
-  <div class="card">
-    <button class="button primary" onclick="goBack()">
-      📝 Предложить новость
-    </button>
+  <div class="tabs">
+    <button class="tab active" onclick="openTab('my')">Мои отправки</button>
+    <button class="tab" onclick="openTab('top')">Топ</button>
+    <button class="tab" onclick="openTab('profile')">Профиль</button>
+  </div>
 
-    <button class="button secondary" onclick="goBack()">
-      💬 Написать админам
-    </button>
+  <div class="screen active" id="my">
+    <div class="card">
+      <div class="title">Мои отправки</div>
+      <div class="text">
+        Здесь будут видны твои предложения, материалы 18+ и сообщения админам.
+      </div>
+    </div>
 
-    <button class="button secondary" onclick="goBack()">
-      🔞 Материалы 18+
-    </button>
+    <div class="empty">
+      История отправок появится после подключения базы к Mini App.
+    </div>
+  </div>
 
-    <button class="button secondary" onclick="goBack()">
-      📂 Мои отправки
-    </button>
+  <div class="screen" id="top">
+    <div class="card">
+      <div class="title">Топ предложений</div>
+      <div class="text">
+        Здесь будут самые интересные и популярные предложения района.
+      </div>
+    </div>
 
-    <div class="status">
-      Нажми кнопку — Mini App закроется, а в чате выбери нужное действие.
+    <div class="empty">
+      Рейтинг появится после подключения базы к Mini App.
+    </div>
+  </div>
+
+  <div class="screen" id="profile">
+    <div class="card">
+      <div class="title">Профиль</div>
+      <div id="profile-content">
+        <div class="profile-row">
+          <span>Имя</span>
+          <span class="value" id="user-name">—</span>
+        </div>
+
+        <div class="profile-row">
+          <span>Username</span>
+          <span class="value" id="user-username">—</span>
+        </div>
+
+        <div class="profile-row">
+          <span>ID</span>
+          <span class="value" id="user-id">—</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="title">Статус</div>
+      <div class="text">
+        Профиль открыт через Telegram. Данные видны только тебе.
+      </div>
     </div>
   </div>
 
@@ -108,11 +186,43 @@
       tg.expand();
     }
 
-    function goBack() {
-      if (tg) {
-        tg.close();
+    function openTab(name) {
+      document.querySelectorAll(".tab").forEach(button => {
+        button.classList.remove("active");
+      });
+
+      document.querySelectorAll(".screen").forEach(screen => {
+        screen.classList.remove("active");
+      });
+
+      document.getElementById(name).classList.add("active");
+
+      if (name === "my") {
+        document.querySelectorAll(".tab")[0].classList.add("active");
+      }
+
+      if (name === "top") {
+        document.querySelectorAll(".tab")[1].classList.add("active");
+      }
+
+      if (name === "profile") {
+        document.querySelectorAll(".tab")[2].classList.add("active");
       }
     }
+
+    function fillProfile() {
+      const user = tg?.initDataUnsafe?.user;
+
+      if (!user) {
+        return;
+      }
+
+      document.getElementById("user-name").textContent = user.first_name || "—";
+      document.getElementById("user-username").textContent = user.username ? "@" + user.username : "—";
+      document.getElementById("user-id").textContent = user.id || "—";
+    }
+
+    fillProfile();
   </script>
 </body>
 </html>
