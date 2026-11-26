@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Подслушано Измайлово</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #171a21;
+      --card-2: #1e222b;
+      --text: #f2f4f8;
+      --muted: #9aa3b2;
+      --accent: #4f8cff;
+      --accent-2: #7c5cff;
+      --good: #35d07f;
+      --danger: #ff5c72;
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(900px 500px at 15% -10%, rgba(79, 140, 255, .18), transparent),
+        radial-gradient(800px 500px at 100% 0%, rgba(124, 92, 255, .14), transparent),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    .app {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 18px 16px 96px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 10px 24px rgba(79, 140, 255, .25);
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      background: rgba(255, 255, 255, .05);
+      border: 1px solid rgba(255, 255, 255, .07);
+      padding: 5px;
+      border-radius: 16px;
+      margin-bottom: 18px;
+    }
+
+    .tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 650;
+      padding: 11px 6px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: .18s;
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(79, 140, 255, .22);
+    }
+
+    .screen {
+      display: none;
+      animation: appear .22s ease;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(14px);
+    }
+
+    .profile-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .avatar {
+      width: 62px;
+      height: 62px;
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      font-size: 26px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      flex: 0 0 auto;
+    }
+
+    .profile-name {
+      font-size: 20px;
+      font-weight: 750;
+      margin: 0;
+    }
+
+    .profile-id {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 4px 0 0;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .stat {
+      background: var(--card-2);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+
+    .stat b {
+      display: block;
+      font-size: 22px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 22px 4px 12px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .rank {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      background: var(--card-2);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      margin-bottom: 9px;
+    }
+
+    .rank.me {
+      border-color: rgba(79, 140, 255, .55);
+      background: rgba(79, 140, 255, .12);
+    }
+
+    .place {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      background: rgba(255,255,255,.08);
+      flex: 0 0 auto;
+    }
+
+    .rank-name {
+      font-weight: 650;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .rank-count {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .post {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .post-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 15px;
+    }
+
+    .kind {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(79, 140, 255, .16);
+      color: #9ec1ff;
+      white-space: nowrap;
+    }
+
+    .kind.adult { background: rgba(255, 92, 114, .15); color: #ffb3bd; }
+    .kind.contact { background: rgba(53, 208, 127, .15); color: #8ff0bb; }
+    .kind.withdrawn { background: rgba(255, 255, 255, .09); color: var(--muted); }
+
+    .post-date {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .post-text {
+      padding: 0 15px 15px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .post-media {
+      display: grid;
+      gap: 8px;
+      padding: 0 15px 15px;
+    }
+
+    .post-media img,
+    .post-media video {
+      width: 100%;
+      max-height: 420px;
+      object-fit: cover;
+      border-radius: 14px;
+      background: #000;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 34px 18px;
+      color: var(--muted);
+    }
+
+    .empty b {
+      display: block;
+      color: var(--text);
+      font-size: 17px;
+      margin-bottom: 6px;
+    }
+
+    .loader {
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 30px;
+      height: 30px;
+      border: 3px solid rgba(255,255,255,.14);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error {
+      background: rgba(255, 92, 114, .12);
+      border: 1px solid rgba(255, 92, 114, .3);
+      color: #ffb3bd;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 14px;
+    }
+
+    .bottom {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+      background: rgba(15, 17, 21, .88);
+      backdrop-filter: blur(18px);
+      border-top: 1px solid rgba(255,255,255,.07);
+      z-index: 10;
+    }
+
+    .bottom-inner {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .action {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 15px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      cursor: pointer;
+    }
+
+    @media (max-width: 480px) {
+      .app { padding: 14px 12px 92px; }
+      .stats { grid-template-columns: repeat(3, 1fr); }
+      .stat b { font-size: 19px; }
+      .post-media img, .post-media video { max-height: 300px; }
+    }
+
+    @media (min-width: 700px) {
+      .app { padding: 30px 24px 110px; }
+      .posts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .post { margin-bottom: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">🕶</div>
+        <div>
+          <h1>Подслушано Измайлово</h1>
+          <p>Профиль, рейтинг и отправки</p>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-screen="profile">Профиль</button>
+      <button class="tab" data-screen="rating">Рейтинг</button>
+      <button class="tab" data-screen="history">Отправки</button>
+    </nav>
+
+    <main>
+      <section id="profile" class="screen active">
+        <div id="profile-content" class="loader">
+          <div>
+            <div class="spinner"></div>
+            Загружаю профиль…
+          </div>
+        </div>
+      </section>
+
+      <section id="rating" class="screen">
+        <div id="rating-content" class="loader">
+          <div>
+            <div class="spinner"></div>
+            Загружаю рейтинг…
+          </div>
+        </div>
+      </section>
+
+      <section id="history" class="screen">
+        <div id="history-content" class="loader">
+          <div>
+            <div class="spinner"></div>
+            Загружаю отправки…
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="bottom">
+    <div class="bottom-inner">
+      <button class="action" onclick="Telegram.WebApp.close()">
+        Закрыть
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE_URL = "https://ТВОЙ-АДРЕС-БОТА";
+
+    const tg = window.Telegram?.WebApp;
+    tg?.ready();
+    tg?.expand();
+    tg?.setHeaderColor?.("#0f1115");
+    tg?.setBackgroundColor?.("#0f1115");
+
+    const kindNames = {
+      suggestion: "📝 Предложение",
+      adult: "🔞 18+",
+      contact: "💬 Админам"
+    };
+
+    function authHeaders() {
+      return {
+        "Authorization": `Telegram ${tg?.initData || ""}`,
+        "Content-Type": "application/json"
+      };
+    }
+
+    async function api(path) {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: authHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error("Не удалось загрузить данные");
+      }
+
+      return await response.json();
+    }
+
+    function formatDate(timestamp) {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function showError(container, message) {
+      container.className = "";
+      container.innerHTML = `<div class="error">${escapeHtml(message)}</div>`;
+    }
+
+    function renderProfile(data) {
+      const container = document.getElementById("profile-content");
+      const name = data.display_name || "Аноним";
+      const initial = name.trim().charAt(0).toUpperCase() || "А";
+
+      container.className = "";
+      container.innerHTML = `
+        <div class="card">
+          <div class="profile-head">
+            <div class="avatar">${escapeHtml(initial)}</div>
+            <div>
+              <h2 class="profile-name">${escapeHtml(name)}</h2>
+              <p class="profile-id">ID: ${data.user_id}</p>
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <b>${data.suggestions_count ?? 0}</b>
+              <span>Предложений</span>
+            </div>
+            <div class="stat">
+              <b>#${data.position ?? "—"}</b>
+              <span>В рейтинге</span>
+            </div>
+            <div class="stat">
+              <b>${data.total_submissions ?? 0}</b>
+              <span>Всего отправок</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h2>Анонимность</h2>
+          </div>
+          <p class="muted">
+            ${data.is_anonymous
+              ? "В публичном рейтинге ты отображаешься как «Аноним»."
+              : "В рейтинге может отображаться твоё имя. Админы видят ID для обратной связи."}
+          </p>
+        </div>
+      `;
+    }
+
+    function renderRating(rows) {
+      const container = document.getElementById("rating-content");
+
+      if (!rows.length) {
+        container.className = "";
+        container.innerHTML = `
+          <div class="empty">
+            <b>Рейтинг пока пустой</b>
+            Отправь первое предложение — и оно появится здесь.
+          </div>
+        `;
+        return;
+      }
+
+      container.className = "";
+      container.innerHTML = `
+        <div class="card">
+          <div class="section-title">
+            <h2>Топ участников</h2>
+            <span class="muted">${rows.length}</span>
+          </div>
+          ${rows.map(row => `
+            <div class="rank ${row.is_me ? "me" : ""}">
+              <div class="place">${row.position}</div>
+              <div class="rank-name">${escapeHtml(row.display_name)}</div>
+              <div class="rank-count">${row.suggestions_count}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderHistory(rows) {
+      const container = document.getElementById("history-content");
+
+      if (!rows.length) {
+        container.className = "";
+        container.innerHTML = `
+          <div class="empty">
+            <b>Пока нет отправок</b>
+            Здесь появятся твои предложения, материалы 18+ и сообщения админам.
+          </div>
+        `;
+        return;
+      }
+
+      container.className = "posts";
+      container.innerHTML = rows.map(row => {
+        const status = row.status === "withdrawn" ? "withdrawn" : row.kind;
+        const media = (row.media || []).map(item => {
+          if (item.type === "photo") {
+            return `<img src="${escapeHtml(item.url)}" alt="">`;
+          }
+          if (item.type === "video") {
+            return `<video src="${escapeHtml(item.url)}" controls playsinline></video>`;
+          }
+          return "";
+        }).join("");
+
+        return `
+          <article class="post">
+            <div class="post-head">
+              <span class="kind ${status}">${kindNames[row.kind] || "Отправка"}</span>
+              <span class="post-date">${formatDate(row.created_at)}</span>
+            </div>
+            ${row.body ? `<div class="post-text">${escapeHtml(row.body)}</div>` : ""}
+            ${media ? `<div class="post-media">${media}</div>` : ""}
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function loadAll() {
+      const profile = document.getElementById("profile-content");
+      const rating = document.getElementById("rating-content");
+      const history = document.getElementById("history-content");
+
+      try {
+        renderProfile(await api("/api/me"));
+      } catch (error) {
+        showError(profile, "Не удалось загрузить профиль.");
+      }
+
+      try {
+        renderRating(await api("/api/rating"));
+      } catch (error) {
+        showError(rating, "Не удалось загрузить рейтинг.");
+      }
+
+      try {
+        renderHistory(await api("/api/submissions"));
+      } catch (error) {
+        showError(history, "Не удалось загрузить отправки.");
+      }
+    }
+
+    document.querySelectorAll(".tab").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
+        document.querySelectorAll(".screen").forEach(item => item.classList.remove("active"));
+
+        button.classList.add("active");
+        document.getElementById(button.dataset.screen).classList.add("active");
+      });
+    });
+
+    loadAll();
+  </script>
+</body>
+</html>
