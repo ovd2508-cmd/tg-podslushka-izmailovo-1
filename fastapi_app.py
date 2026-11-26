@@ -6,14 +6,14 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DB_PATH = os.getenv("DB_PATH", "/app/data/bot.db")
 
-app = FastAPI(title="Podslushano Izmaylovo Mini App API")
+router = APIRouter()
 
 
 def get_db():
@@ -78,16 +78,20 @@ def validate_init_data(init_data: str) -> dict[str, Any]:
             item.split("=", 1)
             for item in init_data.split("&")
         )
+
         received_hash = parsed.pop("hash")
+
         data_check_string = "\n".join(
             f"{key}={value}"
             for key, value in sorted(parsed.items())
         )
+
         secret_key = hmac.new(
             b"WebAppData",
             BOT_TOKEN.encode(),
             hashlib.sha256,
         ).digest()
+
         calculated_hash = hmac.new(
             secret_key,
             data_check_string.encode(),
@@ -118,13 +122,15 @@ def get_user_id(request: Request) -> int:
 
 
 def get_profile(connection: sqlite3.Connection, user_id: int):
+    now = int(datetime.now(timezone.utc).timestamp())
+
     connection.execute(
         """
         INSERT OR IGNORE INTO user_profiles
         (user_id, display_name, is_anonymous, created_at, updated_at)
         VALUES (?, '', 1, ?, ?)
         """,
-        (user_id, int(datetime.now(timezone.utc).timestamp()), int(datetime.now(timezone.utc).timestamp())),
+        (user_id, now, now),
     )
 
     connection.execute(
@@ -133,7 +139,7 @@ def get_profile(connection: sqlite3.Connection, user_id: int):
         (user_id, suggestions_count, published_count, likes_count, updated_at)
         VALUES (?, 0, 0, 0, ?)
         """,
-        (user_id, int(datetime.now(timezone.utc).timestamp())),
+        (user_id, now),
     )
 
     connection.commit()
@@ -151,7 +157,7 @@ def get_profile(connection: sqlite3.Connection, user_id: int):
     return profile, stats
 
 
-@app.get("/api/my_suggestions")
+@router.get("/api/my_suggestions")
 async def my_suggestions(request: Request):
     user_id = get_user_id(request)
     connection = get_db()
@@ -190,7 +196,7 @@ async def my_suggestions(request: Request):
     }
 
 
-@app.post("/api/suggestions/{suggestion_id}/cancel")
+@router.post("/api/suggestions/{suggestion_id}/cancel")
 async def cancel_suggestion(suggestion_id: int, request: Request):
     user_id = get_user_id(request)
     connection = get_db()
@@ -218,16 +224,23 @@ async def cancel_suggestion(suggestion_id: int, request: Request):
         SET status = 'Отклонено', updated_at = ?
         WHERE id = ? AND user_id = ?
         """,
-        (int(datetime.now(timezone.utc).timestamp()), suggestion_id, user_id),
+        (
+            int(datetime.now(timezone.utc).timestamp()),
+            suggestion_id,
+            user_id,
+        ),
     )
 
     connection.commit()
     connection.close()
 
-    return {"ok": True, "status": "Отклонено"}
+    return {
+        "ok": True,
+        "status": "Отклонено",
+    }
 
 
-@app.get("/api/leaderboard")
+@router.get("/api/leaderboard")
 async def leaderboard(request: Request):
     get_user_id(request)
     connection = get_db()
@@ -260,7 +273,11 @@ async def leaderboard(request: Request):
             {
                 "place": index + 1,
                 "user_id": row["user_id"],
-                "name": "Аноним" if row["is_anonymous"] or not row["display_name"] else row["display_name"],
+                "name": (
+                    "Аноним"
+                    if row["is_anonymous"] or not row["display_name"]
+                    else row["display_name"]
+                ),
                 "suggestions_count": row["suggestions_count"],
                 "published_count": row["published_count"],
                 "likes_count": row["likes_count"],
@@ -270,10 +287,11 @@ async def leaderboard(request: Request):
     }
 
 
-@app.get("/api/profile/me")
+@router.get("/api/profile/me")
 async def profile_me(request: Request):
     user_id = get_user_id(request)
     connection = get_db()
+
     profile, stats = get_profile(connection, user_id)
     connection.close()
 
@@ -292,7 +310,7 @@ class ProfileSave(BaseModel):
     is_anonymous: bool = True
 
 
-@app.post("/api/profile/save")
+@router.post("/api/profile/save")
 async def profile_save(data: ProfileSave, request: Request):
     user_id = get_user_id(request)
     display_name = data.display_name.strip()[:32]
@@ -318,11 +336,3 @@ async def profile_save(data: ProfileSave, request: Request):
         "display_name": display_name,
         "is_anonymous": data.is_anonymous,
     }
-
-
-@app.exception_handler(HTTPException)
-async def http_error(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
