@@ -527,3 +527,98 @@ async def withdraw(call: CallbackQuery):
     if not submission or not await withdraw_submission(submission_id, call.from_user.id):
         await call.answer(
             "Заявка уже отозвана или недоступна.",
+            show_alert=True,
+        )
+        return
+
+    await call.answer("Заявка отозвана")
+
+    notice = (
+        f"↩️ Отправитель отозвал заявку #{submission_id}.\n"
+        f"ID исходного сообщения: {submission['admin_message_id']}.\n"
+        "Не публикуйте её без повторного согласования."
+    )
+
+    notified = False
+
+    try:
+        await bot.send_message(
+            ADMIN_CHAT_ID,
+            notice,
+            reply_to_message_id=submission["admin_message_id"],
+            allow_sending_without_reply=True,
+        )
+        notified = True
+    except TelegramAPIError:
+        logger.exception("Withdrawal notification failed")
+
+    await call.message.answer(
+        "Заявка отозвана. "
+        + (
+            "Админы уведомлены."
+            if notified
+            else "Не удалось уведомить админов. Напиши им через «💬 Написать админам»."
+        ),
+        reply_markup=main_keyboard(),
+    )
+
+    await call.message.edit_reply_markup(
+        reply_markup=inline([[cb("📂 К списку", "history:0")]])
+    )
+
+
+@dp.message(F.chat.id == ADMIN_CHAT_ID, F.reply_to_message)
+async def reply_admin(message: Message):
+    target = await get_reply_target(message.reply_to_message.message_id)
+
+    if not target:
+        return
+
+    if message.sender_chat or not message.from_user:
+        await message.reply("Ответь от своего личного аккаунта администратора.")
+        return
+
+    member = await bot.get_chat_member(ADMIN_CHAT_ID, message.from_user.id)
+
+    if member.status not in {"creator", "administrator"}:
+        return
+
+    if target[1] == "withdrawn":
+        await message.reply(
+            "Заявка отозвана. Для переписки дождись нового обращения пользователя."
+        )
+        return
+
+    if message.media_group_id:
+        await message.reply("Ответ нужно отправить одним сообщением, не альбомом.")
+        return
+
+    try:
+        await combined(target[0], message, "💬 Ответ админа")
+    except ValueError as error:
+        await message.reply(str(error))
+        return
+    except TelegramAPIError:
+        logger.exception("Reply failed")
+        await message.reply("Не получилось отправить ответ.")
+        return
+
+    await message.reply("Ответ отправлен.")
+
+
+@dp.message(F.chat.type == ChatType.PRIVATE)
+async def fallback(message: Message):
+    await message.answer(
+        "Выбери действие на панели внизу.",
+        reply_markup=main_keyboard(),
+    )
+
+
+@dp.errors()
+async def errors(event: ErrorEvent):
+    exception = event.exception
+    logger.error(
+        "Update error",
+        exc_info=(type(exception), exception, exception.__traceback__),
+    )
+    return True
