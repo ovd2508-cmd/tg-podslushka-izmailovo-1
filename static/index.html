@@ -79,16 +79,24 @@
   </div>
 
   <div class="card">
-    <button class="button primary" onclick="closeApp()">
+    <button class="button primary" onclick="goBack()">
       📝 Предложить новость
     </button>
 
-    <button class="button secondary" onclick="closeApp()">
-      Закрыть
+    <button class="button secondary" onclick="goBack()">
+      💬 Написать админам
+    </button>
+
+    <button class="button secondary" onclick="goBack()">
+      🔞 Материалы 18+
+    </button>
+
+    <button class="button secondary" onclick="goBack()">
+      📂 Мои отправки
     </button>
 
     <div class="status">
-      Mini App подключён
+      Нажми кнопку — Mini App закроется, а в чате выбери нужное действие.
     </div>
   </div>
 
@@ -100,7 +108,7 @@
       tg.expand();
     }
 
-    function closeApp() {
+    function goBack() {
       if (tg) {
         tg.close();
       }
