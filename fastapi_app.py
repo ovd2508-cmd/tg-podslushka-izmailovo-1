@@ -7,30 +7,24 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from urllib.parse import parse_qsl
 
-from fastapi import (
-    Depends,
-    FastAPI,
-    Header,
-    HTTPException,
-    Response,
-)
+from aiogram.exceptions import TelegramAPIError
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
-from config import (
-    BASE_DIR,
-    BOT_TOKEN,
-    MINI_APP_AUTH_MAX_AGE,
-)
+from bot import bot
+from config import BASE_DIR, BOT_TOKEN, MINI_APP_AUTH_MAX_AGE
 from db import (
+    get_media_owner,
     get_public_top,
+    get_submission_count,
     get_suggestion_count,
     get_user_profile,
+    get_user_submissions,
     init_db,
     save_user_profile,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +52,9 @@ app = FastAPI(
 
 app.state.database_ready = False
 
-# Папка может ещё отсутствовать при первом запуске.
-# Поэтому проверку её существования откладываем.
 app.mount(
     "/static",
-    StaticFiles(
-        directory=str(STATIC_DIR),
-        check_dir=False,
-    ),
+    StaticFiles(directory=str(STATIC_DIR), check_dir=False),
     name="static",
 )
 
@@ -77,7 +66,6 @@ async def response_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
 
-    # Не разрешаем кэшировать персональные ответы API.
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
 
@@ -85,27 +73,15 @@ async def response_headers(request, call_next):
 
 
 def unauthorized(detail: str) -> HTTPException:
-    return HTTPException(
-        status_code=401,
-        detail=detail,
-    )
+    return HTTPException(status_code=401, detail=detail)
 
 
 def validate_init_data(raw_init_data: str) -> dict:
-    """
-    Проверить Telegram WebApp.initData.
-
-    Возвращает только проверенные данные пользователя.
-    """
     if not raw_init_data:
-        raise unauthorized(
-            "Открой приложение через кнопку в Telegram-боте."
-        )
+        raise unauthorized("Открой приложение через кнопку в Telegram-боте.")
 
     if len(raw_init_data) > 16384:
-        raise unauthorized(
-            "Слишком большой объём данных авторизации."
-        )
+        raise unauthorized("Слишком большой объём данных авторизации.")
 
     try:
         pairs = parse_qsl(
@@ -117,21 +93,14 @@ def validate_init_data(raw_init_data: str) -> dict:
             errors="strict",
         )
     except (ValueError, UnicodeError):
-        raise unauthorized(
-            "Некорректный формат данных авторизации."
-        )
+        raise unauthorized("Некорректный формат данных авторизации.")
 
-    # Не принимаем неоднозначные параметры,
-    # например два разных поля user или hash.
     keys = [key for key, _ in pairs]
 
     if len(keys) != len(set(keys)):
-        raise unauthorized(
-            "Дублирующиеся параметры авторизации."
-        )
+        raise unauthorized("Дублирующиеся параметры авторизации.")
 
     data = dict(pairs)
-
     received_hash = data.pop("hash", None)
 
     if (
@@ -142,13 +111,8 @@ def validate_init_data(raw_init_data: str) -> dict:
             for character in received_hash
         )
     ):
-        raise unauthorized(
-            "Отсутствует или повреждена подпись Telegram."
-        )
+        raise unauthorized("Отсутствует или повреждена подпись Telegram.")
 
-    # Для проверки HMAC с токеном исключаем только hash.
-    # Если Telegram передал signature, оно остаётся
-    # частью проверяемой строки.
     data_check_string = "\n".join(
         f"{key}={value}"
         for key, value in sorted(data.items())
@@ -166,100 +130,56 @@ def validate_init_data(raw_init_data: str) -> dict:
         digestmod=hashlib.sha256,
     ).hexdigest()
 
-    if not hmac.compare_digest(
-        expected_hash,
-        received_hash.lower(),
-    ):
-        raise unauthorized(
-            "Подпись Telegram не прошла проверку."
-        )
+    if not hmac.compare_digest(expected_hash, received_hash.lower()):
+        raise unauthorized("Подпись Telegram не прошла проверку.")
 
     try:
         auth_date = int(data["auth_date"])
     except (KeyError, TypeError, ValueError):
-        raise unauthorized(
-            "Отсутствует корректное время авторизации."
-        )
+        raise unauthorized("Отсутствует корректное время авторизации.")
 
     now = time.time()
 
     if auth_date > now + 60:
-        raise unauthorized(
-            "Некорректное время авторизации. "
-            "Проверь время на сервере."
-        )
+        raise unauthorized("Некорректное время авторизации.")
 
     if now - auth_date > MINI_APP_AUTH_MAX_AGE:
-        raise unauthorized(
-            "Сессия истекла. "
-            "Закрой приложение и открой его снова через бота."
-        )
+        raise unauthorized("Сессия истекла. Открой приложение заново.")
 
     try:
         user = json.loads(data["user"])
     except (KeyError, TypeError, ValueError):
-        raise unauthorized(
-            "В авторизации отсутствует пользователь Telegram."
-        )
+        raise unauthorized("В авторизации отсутствует пользователь Telegram.")
 
     if not isinstance(user, dict):
-        raise unauthorized(
-            "Некорректные данные пользователя."
-        )
+        raise unauthorized("Некорректные данные пользователя.")
 
     user_id = user.get("id")
 
     if type(user_id) is not int or user_id <= 0:
-        raise unauthorized(
-            "Некорректный ID пользователя Telegram."
-        )
+        raise unauthorized("Некорректный ID пользователя Telegram.")
 
     return user
 
 
 async def current_user(
-    authorization: Annotated[
-        str | None,
-        Header(),
-    ] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> dict:
-    """
-    Фронтенд должен отправлять заголовок:
-
-    Authorization: tma <Telegram.WebApp.initData>
-    """
     if not authorization:
-        raise unauthorized(
-            "Открой приложение из Telegram-бота."
-        )
+        raise unauthorized("Открой приложение из Telegram-бота.")
 
-    scheme, separator, credentials = (
-        authorization.partition(" ")
-    )
+    scheme, separator, credentials = authorization.partition(" ")
 
-    if (
-        not separator
-        or scheme.lower() != "tma"
-        or not credentials
-    ):
-        raise unauthorized(
-            "Неверный формат заголовка авторизации."
-        )
+    if not separator or scheme.lower() not in {"tma", "telegram"} or not credentials:
+        raise unauthorized("Неверный формат заголовка авторизации.")
 
     return validate_init_data(credentials)
 
 
-TelegramUser = Annotated[
-    dict,
-    Depends(current_user),
-]
+TelegramUser = Annotated[dict, Depends(current_user)]
 
 
 def get_telegram_name(user: dict) -> str:
-    """
-    Берём ник или имя только из проверенных данных Telegram,
-    а не из произвольного текста, присланного фронтендом.
-    """
     username = user.get("username")
 
     if isinstance(username, str) and username.strip():
@@ -273,50 +193,52 @@ def get_telegram_name(user: dict) -> str:
         if isinstance(value, str):
             name_parts.extend(value.split())
 
-    return (
-        " ".join(name_parts)[:64]
-        or "Пользователь"
-    )
+    return " ".join(name_parts)[:64] or "Пользователь"
 
 
 async def build_my_profile(user: dict) -> dict:
     user_id = user["id"]
-
     profile = await get_user_profile(user_id)
-    count = await get_suggestion_count(user_id)
+    suggestions_count = await get_suggestion_count(user_id)
+    total_submissions = await get_submission_count(user_id)
 
-    # Пользователь без сохранённого профиля
-    # отображается в рейтинге анонимно.
-    is_anonymous = (
-        profile["is_anonymous"]
-        if profile is not None
-        else True
+    rating = await get_public_top(100, current_user_id=user_id)
+    position = next(
+        (
+            item["position"]
+            for item in rating
+            if item["is_me"]
+        ),
+        None,
     )
 
+    is_anonymous = (
+        profile["is_anonymous"] if profile is not None else True
+    )
     telegram_name = get_telegram_name(user)
 
-    if is_anonymous:
-        display_name = "Аноним"
-    else:
-        display_name = (
-            profile["display_name"]
-            or telegram_name
-        )
+    display_name = (
+        "Аноним"
+        if is_anonymous
+        else profile["display_name"] or telegram_name
+        if profile
+        else telegram_name
+    )
 
     return {
+        "user_id": user_id,
         "telegram_name": telegram_name,
         "display_name": display_name,
         "is_anonymous": is_anonymous,
-        "suggestions_count": count,
+        "suggestions_count": suggestions_count,
+        "total_submissions": total_submissions,
+        "position": position,
         "has_profile": profile is not None,
     }
 
 
 class ProfileUpdate(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        strict=True,
-    )
+    model_config = ConfigDict(extra="forbid", strict=True)
 
     is_anonymous: bool
 
@@ -324,7 +246,6 @@ class ProfileUpdate(BaseModel):
 @app.get("/health")
 async def health(response: Response):
     ready = app.state.database_ready
-
     response.status_code = 200 if ready else 503
 
     return {
@@ -338,18 +259,13 @@ async def index():
     if not INDEX_FILE.is_file():
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Фронтенд ещё не установлен. "
-                "Нужен файл static/index.html."
-            ),
+            detail="Фронтенд ещё не установлен. Нужен файл static/index.html.",
         )
 
     return FileResponse(
         path=INDEX_FILE,
         media_type="text/html",
-        headers={
-            "Cache-Control": "no-cache",
-        },
+        headers={"Cache-Control": "no-cache"},
     )
 
 
@@ -358,13 +274,67 @@ async def api_me(user: TelegramUser):
     return await build_my_profile(user)
 
 
+@app.get("/api/rating")
+async def api_rating(user: TelegramUser):
+    return await get_public_top(10, current_user_id=user["id"])
+
+
 @app.get("/api/top")
 async def api_top(user: TelegramUser):
-    # Авторизация нужна даже для чтения рейтинга.
-    # Персональные ID участников в ответ не включаем.
     return {
-        "items": await get_public_top(10),
+        "items": await get_public_top(10, current_user_id=user["id"])
     }
+
+
+@app.get("/api/submissions")
+async def api_submissions(user: TelegramUser):
+    submissions = await get_user_submissions(user["id"], limit=50)
+
+    return [
+        {
+            "id": item["id"],
+            "kind": item["kind"],
+            "status": item["status"],
+            "body": item["body"],
+            "created_at": item["created_at"],
+            "media": item["media"],
+        }
+        for item in submissions
+    ]
+
+
+@app.get("/api/media/{file_id}")
+async def api_media(file_id: str, user: TelegramUser):
+    media = await get_media_owner(file_id)
+
+    if not media or media["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Файл не найден.")
+
+    try:
+        file = await bot.get_file(file_id)
+        downloaded = await bot.download_file(file.file_path)
+        content = downloaded.read()
+    except TelegramAPIError:
+        logger.exception("Media download failed")
+        raise HTTPException(status_code=502, detail="Файл недоступен.")
+
+    content_types = {
+        "photo": "image/jpeg",
+        "video": "video/mp4",
+        "animation": "video/mp4",
+        "document": "application/octet-stream",
+        "voice": "audio/ogg",
+        "audio": "audio/mpeg",
+    }
+
+    return Response(
+        content=content,
+        media_type=content_types.get(
+            media["media_type"],
+            "application/octet-stream",
+        ),
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @app.post("/api/profile")
