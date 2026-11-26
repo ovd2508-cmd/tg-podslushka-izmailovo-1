@@ -1,260 +1,116 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Подслушано Измайлово</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1, viewport-fit=cover"
-    >
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f2f4f7;
+      color: #111;
+      min-height: 100vh;
+      padding: 16px;
+    }
 
-    <meta name="color-scheme" content="light dark">
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    }
 
-    <title>Подслушано Измайлово — рейтинг</title>
+    h1 {
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
 
-    <link rel="stylesheet" href="/static/style.css">
+    p {
+      font-size: 15px;
+      line-height: 1.45;
+      color: #444;
+    }
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="/static/app.js" defer></script>
+    .button {
+      display: block;
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: #2481cc;
+      color: #fff;
+    }
+
+    .secondary {
+      background: #eef2f6;
+      color: #2481cc;
+    }
+
+    .status {
+      font-size: 13px;
+      color: #777;
+      margin-top: 10px;
+      text-align: center;
+    }
+  </style>
 </head>
-
 <body>
-    <main class="app">
-        <header class="page-header">
-            <span class="eyebrow">ПОДСЛУШАНО ИЗМАЙЛОВО</span>
+  <div class="card">
+    <h1>Подслушано Измайлово</h1>
+    <p>
+      Анонимная предложка района: рассказывай о событиях, проблемах,
+      историях и интересных находках.
+    </p>
+  </div>
 
-            <h1>Рейтинг участников</h1>
+  <div class="card">
+    <button class="button primary" onclick="openBot()">
+      📝 Предложить новость
+    </button>
 
-            <p class="subtitle">
-                Отправляй предложения в бота
-                и поднимайся в топе.
-            </p>
-        </header>
+    <button class="button secondary" onclick="closeApp()">
+      Закрыть
+    </button>
 
-        <!-- Сообщения о загрузке, успехе и ошибках. -->
-        <div
-            id="status"
-            class="status"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-        >
-            Подключаемся…
-        </div>
+    <div class="status">
+      Mini App подключён
+    </div>
+  </div>
 
-        <!-- Показывается при открытии вне Telegram
-             или при ошибке авторизации. -->
-        <section
-            id="auth-error"
-            class="card"
-            aria-labelledby="auth-error-title"
-            hidden
-        >
-            <h2 id="auth-error-title">
-                Открой приложение из бота
-            </h2>
+  <script>
+    const tg = window.Telegram?.WebApp;
 
-            <p id="auth-error-text">
-                Для входа используй кнопку
-                «Открыть Mini App» в личном чате с ботом.
-            </p>
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
-            <a
-                class="button button-primary"
-                href="https://t.me/podslushka_izmail_bot"
-                target="_blank"
-                rel="noopener noreferrer"
-            >
-                Перейти к боту
-            </a>
-        </section>
+    function openBot() {
+      if (tg) {
+        tg.close();
+      }
+    }
 
-        <!-- Отображается после успешной авторизации. -->
-        <div id="app-content" hidden>
-            <section
-                class="card profile-card"
-                aria-labelledby="profile-title"
-            >
-                <div class="section-heading">
-                    <div>
-                        <span class="eyebrow">ТВОЙ ПРОФИЛЬ</span>
-
-                        <h2 id="profile-title">
-                            Как показывать тебя в рейтинге?
-                        </h2>
-                    </div>
-                </div>
-
-                <p class="muted">
-                    Выбери анонимное отображение
-                    или своё имя из Telegram.
-                </p>
-
-                <form id="profile-form">
-                    <fieldset
-                        id="profile-options"
-                        class="profile-options"
-                        disabled
-                    >
-                        <legend class="sr-only">
-                            Отображение в рейтинге
-                        </legend>
-
-                        <label class="choice">
-                            <input
-                                id="mode-anonymous"
-                                type="radio"
-                                name="profile-mode"
-                                value="anonymous"
-                                checked
-                            >
-
-                            <span class="choice-content">
-                                <span class="choice-title">
-                                    Аноним
-                                </span>
-
-                                <span class="choice-description">
-                                    Имя не видно в рейтинге
-                                </span>
-                            </span>
-                        </label>
-
-                        <label class="choice">
-                            <input
-                                id="mode-named"
-                                type="radio"
-                                name="profile-mode"
-                                value="named"
-                            >
-
-                            <span class="choice-content">
-                                <span class="choice-title">
-                                    Моё имя
-                                </span>
-
-                                <span
-                                    id="telegram-name"
-                                    class="choice-description"
-                                >
-                                    Загружаем имя из Telegram…
-                                </span>
-                            </span>
-                        </label>
-                    </fieldset>
-
-                    <button
-                        id="save-profile"
-                        class="button button-primary"
-                        type="submit"
-                        disabled
-                    >
-                        Сохранить выбор
-                    </button>
-                </form>
-
-                <p class="privacy-note">
-                    Настройка влияет только на рейтинг.
-                    Администраторы бота видят ID
-                    и данные отправителя для обратной связи.
-                </p>
-            </section>
-
-            <section
-                class="card personal-stats"
-                aria-labelledby="personal-stats-title"
-            >
-                <div>
-                    <h2 id="personal-stats-title">
-                        Твои предложения
-                    </h2>
-
-                    <p class="muted">
-                        Успешно отправленные через режим
-                        «Отправить предложение».
-                    </p>
-                </div>
-
-                <strong
-                    id="my-count"
-                    class="stat-value"
-                    aria-live="polite"
-                >
-                    —
-                </strong>
-            </section>
-
-            <section
-                class="card rating-card"
-                aria-labelledby="rating-title"
-            >
-                <div class="section-heading">
-                    <div>
-                        <span class="eyebrow">САМЫЕ АКТИВНЫЕ</span>
-
-                        <h2 id="rating-title">
-                            Топ-10
-                        </h2>
-                    </div>
-
-                    <button
-                        id="refresh-top"
-                        class="button button-secondary"
-                        type="button"
-                        disabled
-                    >
-                        Обновить
-                    </button>
-                </div>
-
-                <p id="rating-loading" class="muted">
-                    Загружаем рейтинг…
-                </p>
-
-                <p id="rating-empty" class="empty-state" hidden>
-                    Пока нет предложений.
-                    Первое место может стать твоим.
-                </p>
-
-                <ol
-                    id="rating-list"
-                    class="rating-list"
-                    aria-label="Рейтинг участников"
-                    aria-live="polite"
-                ></ol>
-
-                <p class="privacy-note">
-                    Количество предложений не означает,
-                    что все они были опубликованы в канале.
-                </p>
-            </section>
-
-            <footer class="page-footer">
-                <a
-                    class="button button-secondary"
-                    href="https://t.me/podslushano_izmayolovo"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                >
-                    Открыть канал
-                </a>
-
-                <p class="muted">
-                    Спасибо, что помогаешь делать канал интереснее.
-                </p>
-            </footer>
-        </div>
-
-        <noscript>
-            <section class="card">
-                <h2>Нужен JavaScript</h2>
-
-                <p>
-                    Для работы приложения включи JavaScript
-                    и открой Mini App через Telegram-бота.
-                </p>
-            </section>
-        </noscript>
-    </main>
+    function closeApp() {
+      if (tg) {
+        tg.close();
+      }
+    }
+  </script>
 </body>
 </html>
