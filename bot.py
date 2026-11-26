@@ -300,12 +300,141 @@ async def combined(chat_id: int, source: Message, prefix: str):
     return result.message_id
 
 
+def collect_media(message: Message):
+    media = []
+
+    if message.photo:
+        media.append({
+            "type": "photo",
+            "file_id": message.photo[-1].file_id,
+        })
+
+    if message.video:
+        media.append({
+            "type": "video",
+            "file_id": message.video.file_id,
+        })
+
+    if message.animation:
+        media.append({
+            "type": "animation",
+            "file_id": message.animation.file_id,
+        })
+
+    if message.document:
+        media.append({
+            "type": "document",
+            "file_id": message.document.file_id,
+        })
+
+    if message.voice:
+        media.append({
+            "type": "voice",
+            "file_id": message.voice.file_id,
+        })
+
+    if message.audio:
+        media.append({
+            "type": "audio",
+            "file_id": message.audio.file_id,
+        })
+
+    return media
+
+
 async def deliver(message: Message, state: FSMContext, kind: str):
     if message.media_group_id:
         await message.answer(
             "Альбомы пока не поддерживаются. Отправь фото или видео по одному."
         )
         return
+
+    if message.text and message.text.startswith("/"):
+        await message.answer(
+            "Такой команды нет. Выбери действие на панели внизу."
+        )
+        return
+
+    user_id = message.from_user.id
+
+    async with locks.setdefault(user_id, asyncio.Lock()):
+        last = await get_last_sent_at(user_id)
+        left = FLOOD_SECONDS - max(0, time.time() - last) if last is not None else 0
+
+        if left > 0:
+            await message.answer(
+                f"Подожди ещё {math.ceil(left)} сек. перед следующей отправкой."
+            )
+            return
+
+        user = message.from_user
+        name = (
+            "@" + user.username
+            if user.username
+            else " ".join(user.full_name.split())
+        )
+
+        stamp = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+        prefix = (
+            f"{NAMES[kind]}\n"
+            f"От: {name} (ID: {user_id})\n"
+            f"Время: {stamp}"
+        )
+
+        try:
+            admin_message_id = await combined(ADMIN_CHAT_ID, message, prefix)
+        except ValueError as error:
+            await message.answer(str(error))
+            return
+        except TelegramAPIError:
+            logger.exception("Delivery failed")
+            await message.answer(
+                "Не получилось отправить сообщение. Попробуй ещё раз чуть позже."
+            )
+            return
+
+        media = collect_media(message)
+
+        try:
+            submission_id = await record_submission(
+                user_id,
+                kind,
+                admin_message_id,
+                message.text or message.caption or "📎 Медиа",
+                media,
+            )
+        except Exception:
+            logger.exception(
+                "Delivered but DB failed; user=%s message=%s",
+                user_id,
+                admin_message_id,
+            )
+            await state.clear()
+            await message.answer(
+                "Сообщение доставлено, но сохранить его в истории не удалось. "
+                "Не отправляй его повторно.",
+                reply_markup=main_keyboard(),
+            )
+            return
+
+        await state.clear()
+
+        buttons = [[cb("📂 Посмотреть отправку", f"view:{submission_id}")]]
+
+        if kind != "contact":
+            buttons.append([
+                cb("↩️ Отозвать заявку", f"ask:{submission_id}")
+            ])
+
+        await message.answer(
+            f"Отправлено. Номер отправки: #{submission_id}",
+            reply_markup=main_keyboard(),
+        )
+
+        await message.answer(
+            "Что сделать с этой отправкой?",
+            reply_markup=inline(buttons),
+        )
 
     if message.text and message.text.startswith("/"):
         await message.answer(
