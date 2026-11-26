@@ -1,354 +1,328 @@
 import hashlib
 import hmac
 import json
-import logging
-import time
-from contextlib import asynccontextmanager
-from typing import Annotated
-from urllib.parse import parse_qsl
+import os
+import sqlite3
+from datetime import datetime, timezone
+from typing import Any
 
-from aiogram.exceptions import TelegramAPIError
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from bot import bot
-from config import BASE_DIR, BOT_TOKEN, MINI_APP_AUTH_MAX_AGE
-from db import (
-    get_media_owner,
-    get_public_top,
-    get_submission_count,
-    get_suggestion_count,
-    get_user_profile,
-    get_user_submissions,
-    init_db,
-    save_user_profile,
-)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+DB_PATH = os.getenv("DB_PATH", "/app/data/bot.db")
 
-logger = logging.getLogger(__name__)
-
-STATIC_DIR = BASE_DIR / "static"
-INDEX_FILE = STATIC_DIR / "index.html"
+app = FastAPI(title="Podslushano Izmaylovo Mini App API")
 
 
-@asynccontextmanager
-async def lifespan(application: FastAPI):
-    await init_db()
-    application.state.database_ready = True
-
-    try:
-        yield
-    finally:
-        application.state.database_ready = False
+def get_db():
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    return connection
 
 
-app = FastAPI(
-    title="Подслушано Измайлово",
-    docs_url=None,
-    redoc_url=None,
-    lifespan=lifespan,
-)
+def init_api_tables():
+    connection = get_db()
 
-app.state.database_ready = False
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            user_id INTEGER PRIMARY KEY,
+            display_name TEXT DEFAULT '',
+            is_anonymous INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
 
-app.mount(
-    "/static",
-    StaticFiles(directory=str(STATIC_DIR), check_dir=False),
-    name="static",
-)
+        CREATE TABLE IF NOT EXISTS user_stats (
+            user_id INTEGER PRIMARY KEY,
+            suggestions_count INTEGER DEFAULT 0,
+            published_count INTEGER DEFAULT 0,
+            likes_count INTEGER DEFAULT 0,
+            updated_at INTEGER NOT NULL
+        );
 
+        CREATE TABLE IF NOT EXISTS suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            text TEXT NOT NULL DEFAULT '',
+            media_type TEXT,
+            media_file_id TEXT,
+            status TEXT NOT NULL DEFAULT 'На модерации',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
 
-@app.middleware("http")
-async def response_headers(request, call_next):
-    response = await call_next(request)
+        CREATE INDEX IF NOT EXISTS idx_suggestions_user
+        ON suggestions(user_id);
 
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "no-referrer"
-
-    if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
-
-    return response
-
-
-def unauthorized(detail: str) -> HTTPException:
-    return HTTPException(status_code=401, detail=detail)
-
-
-def validate_init_data(raw_init_data: str) -> dict:
-    if not raw_init_data:
-        raise unauthorized("Открой приложение через кнопку в Telegram-боте.")
-
-    if len(raw_init_data) > 16384:
-        raise unauthorized("Слишком большой объём данных авторизации.")
-
-    try:
-        pairs = parse_qsl(
-            raw_init_data,
-            keep_blank_values=True,
-            strict_parsing=True,
-            max_num_fields=50,
-            encoding="utf-8",
-            errors="strict",
-        )
-    except (ValueError, UnicodeError):
-        raise unauthorized("Некорректный формат данных авторизации.")
-
-    keys = [key for key, _ in pairs]
-
-    if len(keys) != len(set(keys)):
-        raise unauthorized("Дублирующиеся параметры авторизации.")
-
-    data = dict(pairs)
-    received_hash = data.pop("hash", None)
-
-    if (
-        not received_hash
-        or len(received_hash) != 64
-        or any(
-            character not in "0123456789abcdefABCDEF"
-            for character in received_hash
-        )
-    ):
-        raise unauthorized("Отсутствует или повреждена подпись Telegram.")
-
-    data_check_string = "\n".join(
-        f"{key}={value}"
-        for key, value in sorted(data.items())
+        CREATE INDEX IF NOT EXISTS idx_suggestions_status
+        ON suggestions(status);
+        """
     )
 
-    secret_key = hmac.new(
-        key=b"WebAppData",
-        msg=BOT_TOKEN.encode("utf-8"),
-        digestmod=hashlib.sha256,
-    ).digest()
+    connection.commit()
+    connection.close()
 
-    expected_hash = hmac.new(
-        key=secret_key,
-        msg=data_check_string.encode("utf-8"),
-        digestmod=hashlib.sha256,
-    ).hexdigest()
 
-    if not hmac.compare_digest(expected_hash, received_hash.lower()):
-        raise unauthorized("Подпись Telegram не прошла проверку.")
+init_api_tables()
+
+
+def validate_init_data(init_data: str) -> dict[str, Any]:
+    if not init_data:
+        raise HTTPException(status_code=401, detail="Нет данных Telegram")
 
     try:
-        auth_date = int(data["auth_date"])
-    except (KeyError, TypeError, ValueError):
-        raise unauthorized("Отсутствует корректное время авторизации.")
+        parsed = dict(
+            item.split("=", 1)
+            for item in init_data.split("&")
+        )
+        received_hash = parsed.pop("hash")
+        data_check_string = "\n".join(
+            f"{key}={value}"
+            for key, value in sorted(parsed.items())
+        )
+        secret_key = hmac.new(
+            b"WebAppData",
+            BOT_TOKEN.encode(),
+            hashlib.sha256,
+        ).digest()
+        calculated_hash = hmac.new(
+            secret_key,
+            data_check_string.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+    except Exception:
+        raise HTTPException(status_code=401, detail="Неверные данные Telegram")
 
-    now = time.time()
-
-    if auth_date > now + 60:
-        raise unauthorized("Некорректное время авторизации.")
-
-    if now - auth_date > MINI_APP_AUTH_MAX_AGE:
-        raise unauthorized("Сессия истекла. Открой приложение заново.")
+    if not hmac.compare_digest(calculated_hash, received_hash):
+        raise HTTPException(status_code=401, detail="Подпись Telegram не совпадает")
 
     try:
-        user = json.loads(data["user"])
-    except (KeyError, TypeError, ValueError):
-        raise unauthorized("В авторизации отсутствует пользователь Telegram.")
-
-    if not isinstance(user, dict):
-        raise unauthorized("Некорректные данные пользователя.")
-
-    user_id = user.get("id")
-
-    if type(user_id) is not int or user_id <= 0:
-        raise unauthorized("Некорректный ID пользователя Telegram.")
+        user = json.loads(parsed["user"])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Не найден пользователь Telegram")
 
     return user
 
 
-async def current_user(
-    authorization: Annotated[str | None, Header()] = None,
-) -> dict:
-    if not authorization:
-        raise unauthorized("Открой приложение из Telegram-бота.")
+def get_user_id(request: Request) -> int:
+    init_data = request.headers.get("X-Telegram-Init-Data", "")
 
-    scheme, separator, credentials = authorization.partition(" ")
+    if not init_data:
+        init_data = request.query_params.get("initData", "")
 
-    if not separator or scheme.lower() not in {"tma", "telegram"} or not credentials:
-        raise unauthorized("Неверный формат заголовка авторизации.")
-
-    return validate_init_data(credentials)
+    user = validate_init_data(init_data)
+    return int(user["id"])
 
 
-TelegramUser = Annotated[dict, Depends(current_user)]
-
-
-def get_telegram_name(user: dict) -> str:
-    username = user.get("username")
-
-    if isinstance(username, str) and username.strip():
-        return f"@{username.strip()}"[:64]
-
-    name_parts = []
-
-    for field in ("first_name", "last_name"):
-        value = user.get(field)
-
-        if isinstance(value, str):
-            name_parts.extend(value.split())
-
-    return " ".join(name_parts)[:64] or "Пользователь"
-
-
-async def build_my_profile(user: dict) -> dict:
-    user_id = user["id"]
-    profile = await get_user_profile(user_id)
-    suggestions_count = await get_suggestion_count(user_id)
-    total_submissions = await get_submission_count(user_id)
-
-    rating = await get_public_top(100, current_user_id=user_id)
-    position = next(
-        (
-            item["position"]
-            for item in rating
-            if item["is_me"]
-        ),
-        None,
+def get_profile(connection: sqlite3.Connection, user_id: int):
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO user_profiles
+        (user_id, display_name, is_anonymous, created_at, updated_at)
+        VALUES (?, '', 1, ?, ?)
+        """,
+        (user_id, int(datetime.now(timezone.utc).timestamp()), int(datetime.now(timezone.utc).timestamp())),
     )
 
-    is_anonymous = (
-        profile["is_anonymous"] if profile is not None else True
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO user_stats
+        (user_id, suggestions_count, published_count, likes_count, updated_at)
+        VALUES (?, 0, 0, 0, ?)
+        """,
+        (user_id, int(datetime.now(timezone.utc).timestamp())),
     )
-    telegram_name = get_telegram_name(user)
 
-    display_name = (
-        "Аноним"
-        if is_anonymous
-        else profile["display_name"] or telegram_name
-        if profile
-        else telegram_name
+    connection.commit()
+
+    profile = connection.execute(
+        "SELECT * FROM user_profiles WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+
+    stats = connection.execute(
+        "SELECT * FROM user_stats WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+
+    return profile, stats
+
+
+@app.get("/api/my_suggestions")
+async def my_suggestions(request: Request):
+    user_id = get_user_id(request)
+    connection = get_db()
+
+    rows = connection.execute(
+        """
+        SELECT
+            id,
+            text,
+            media_type,
+            media_file_id,
+            status,
+            created_at
+        FROM suggestions
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 50
+        """,
+        (user_id,),
+    ).fetchall()
+
+    connection.close()
+
+    return {
+        "items": [
+            {
+                "id": row["id"],
+                "text": row["text"],
+                "media_type": row["media_type"],
+                "media_file_id": row["media_file_id"],
+                "status": row["status"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+    }
+
+
+@app.post("/api/suggestions/{suggestion_id}/cancel")
+async def cancel_suggestion(suggestion_id: int, request: Request):
+    user_id = get_user_id(request)
+    connection = get_db()
+
+    row = connection.execute(
+        """
+        SELECT id, status
+        FROM suggestions
+        WHERE id = ? AND user_id = ?
+        """,
+        (suggestion_id, user_id),
+    ).fetchone()
+
+    if not row:
+        connection.close()
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+
+    if row["status"] != "На модерации":
+        connection.close()
+        raise HTTPException(status_code=400, detail="Эту заявку уже нельзя отменить")
+
+    connection.execute(
+        """
+        UPDATE suggestions
+        SET status = 'Отклонено', updated_at = ?
+        WHERE id = ? AND user_id = ?
+        """,
+        (int(datetime.now(timezone.utc).timestamp()), suggestion_id, user_id),
     )
+
+    connection.commit()
+    connection.close()
+
+    return {"ok": True, "status": "Отклонено"}
+
+
+@app.get("/api/leaderboard")
+async def leaderboard(request: Request):
+    get_user_id(request)
+    connection = get_db()
+
+    rows = connection.execute(
+        """
+        SELECT
+            user_stats.user_id,
+            user_stats.suggestions_count,
+            user_stats.published_count,
+            user_stats.likes_count,
+            COALESCE(user_profiles.display_name, '') AS display_name,
+            COALESCE(user_profiles.is_anonymous, 1) AS is_anonymous
+        FROM user_stats
+        LEFT JOIN user_profiles
+            ON user_profiles.user_id = user_stats.user_id
+        ORDER BY
+            user_stats.published_count DESC,
+            user_stats.likes_count DESC,
+            user_stats.suggestions_count DESC,
+            user_stats.user_id ASC
+        LIMIT 10
+        """
+    ).fetchall()
+
+    connection.close()
+
+    return {
+        "items": [
+            {
+                "place": index + 1,
+                "user_id": row["user_id"],
+                "name": "Аноним" if row["is_anonymous"] or not row["display_name"] else row["display_name"],
+                "suggestions_count": row["suggestions_count"],
+                "published_count": row["published_count"],
+                "likes_count": row["likes_count"],
+            }
+            for index, row in enumerate(rows)
+        ]
+    }
+
+
+@app.get("/api/profile/me")
+async def profile_me(request: Request):
+    user_id = get_user_id(request)
+    connection = get_db()
+    profile, stats = get_profile(connection, user_id)
+    connection.close()
 
     return {
         "user_id": user_id,
-        "telegram_name": telegram_name,
-        "display_name": display_name,
-        "is_anonymous": is_anonymous,
-        "suggestions_count": suggestions_count,
-        "total_submissions": total_submissions,
-        "position": position,
-        "has_profile": profile is not None,
+        "display_name": profile["display_name"] or "",
+        "is_anonymous": bool(profile["is_anonymous"]),
+        "suggestions_count": stats["suggestions_count"],
+        "published_count": stats["published_count"],
+        "likes_count": stats["likes_count"],
     }
 
 
-class ProfileUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    is_anonymous: bool
-
-
-@app.get("/health")
-async def health(response: Response):
-    ready = app.state.database_ready
-    response.status_code = 200 if ready else 503
-
-    return {
-        "status": "ok" if ready else "starting",
-        "database_ready": ready,
-    }
+class ProfileSave(BaseModel):
+    display_name: str = ""
+    is_anonymous: bool = True
 
 
-@app.get("/", include_in_schema=False)
-async def index():
-    if not INDEX_FILE.is_file():
-        raise HTTPException(
-            status_code=503,
-            detail="Фронтенд ещё не установлен. Нужен файл static/index.html.",
-        )
+@app.post("/api/profile/save")
+async def profile_save(data: ProfileSave, request: Request):
+    user_id = get_user_id(request)
+    display_name = data.display_name.strip()[:32]
+    now = int(datetime.now(timezone.utc).timestamp())
 
-    return FileResponse(
-        path=INDEX_FILE,
-        media_type="text/html",
-        headers={"Cache-Control": "no-cache"},
+    connection = get_db()
+    get_profile(connection, user_id)
+
+    connection.execute(
+        """
+        UPDATE user_profiles
+        SET display_name = ?, is_anonymous = ?, updated_at = ?
+        WHERE user_id = ?
+        """,
+        (display_name, int(data.is_anonymous), now, user_id),
     )
 
-
-@app.get("/api/me")
-async def api_me(user: TelegramUser):
-    return await build_my_profile(user)
-
-
-@app.get("/api/rating")
-async def api_rating(user: TelegramUser):
-    return await get_public_top(10, current_user_id=user["id"])
-
-
-@app.get("/api/top")
-async def api_top(user: TelegramUser):
-    return {
-        "items": await get_public_top(10, current_user_id=user["id"])
-    }
-
-
-@app.get("/api/submissions")
-async def api_submissions(user: TelegramUser):
-    submissions = await get_user_submissions(user["id"], limit=50)
-
-    return [
-        {
-            "id": item["id"],
-            "kind": item["kind"],
-            "status": item["status"],
-            "body": item["body"],
-            "created_at": item["created_at"],
-            "media": item["media"],
-        }
-        for item in submissions
-    ]
-
-
-@app.get("/api/media/{file_id}")
-async def api_media(file_id: str, user: TelegramUser):
-    media = await get_media_owner(file_id)
-
-    if not media or media["user_id"] != user["id"]:
-        raise HTTPException(status_code=404, detail="Файл не найден.")
-
-    try:
-        file = await bot.get_file(file_id)
-        downloaded = await bot.download_file(file.file_path)
-        content = downloaded.read()
-    except TelegramAPIError:
-        logger.exception("Media download failed")
-        raise HTTPException(status_code=502, detail="Файл недоступен.")
-
-    content_types = {
-        "photo": "image/jpeg",
-        "video": "video/mp4",
-        "animation": "video/mp4",
-        "document": "application/octet-stream",
-        "voice": "audio/ogg",
-        "audio": "audio/mpeg",
-    }
-
-    return Response(
-        content=content,
-        media_type=content_types.get(
-            media["media_type"],
-            "application/octet-stream",
-        ),
-        headers={"Cache-Control": "private, max-age=3600"},
-    )
-
-
-@app.post("/api/profile")
-async def api_profile(
-    payload: ProfileUpdate,
-    user: TelegramUser,
-):
-    await save_user_profile(
-        user_id=user["id"],
-        display_name=get_telegram_name(user),
-        is_anonymous=payload.is_anonymous,
-    )
+    connection.commit()
+    connection.close()
 
     return {
         "ok": True,
-        "profile": await build_my_profile(user),
+        "display_name": display_name,
+        "is_anonymous": data.is_anonymous,
     }
+
+
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
