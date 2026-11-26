@@ -79,7 +79,7 @@
   </div>
 
   <div class="card">
-    <button class="button primary" onclick="openBot()">
+    <button class="button primary" onclick="closeApp()">
       📝 Предложить новость
     </button>
 
@@ -98,12 +98,6 @@
     if (tg) {
       tg.ready();
       tg.expand();
-    }
-
-    function openBot() {
-      if (tg) {
-        tg.close();
-      }
     }
 
     function closeApp() {
