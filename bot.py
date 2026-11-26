@@ -13,8 +13,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     Message, CallbackQuery, ErrorEvent, BotCommand,
-    BotCommandScopeAllPrivateChats, MenuButtonCommands, ReplyKeyboardMarkup,
-    KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo,
+    BotCommandScopeAllPrivateChats, MenuButtonCommands, MenuButtonWebApp,
+    ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
+    InlineKeyboardButton, WebAppInfo,
 )
 
 from config import BOT_TOKEN, ADMIN_CHAT_ID, CHANNEL_URL, FLOOD_SECONDS, MINI_APP_URL
@@ -92,7 +93,17 @@ async def setup_menu():
 
     await bot.set_my_commands(commands)
     await bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
-    await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+
+    if MINI_APP_URL:
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="Open App",
+                web_app=WebAppInfo(url=MINI_APP_URL),
+            )
+        )
+    else:
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+
     await bot.set_my_description(description=DESCRIPTION)
     await bot.set_my_description(description=DESCRIPTION, language_code="ru")
     await bot.set_my_short_description(
