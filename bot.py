@@ -8,17 +8,15 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
-    Message, CallbackQuery, ErrorEvent, BotCommand,
-    BotCommandScopeAllPrivateChats, MenuButtonCommands, MenuButtonWebApp,
+    Message, BotCommand, BotCommandScopeAllPrivateChats, MenuButtonCommands,
     ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup,
-    InlineKeyboardButton, WebAppInfo,
+    InlineKeyboardButton,
 )
 
-from config import BOT_TOKEN, ADMIN_CHAT_ID, CHANNEL_URL, FLOOD_SECONDS, MINI_APP_URL
+from config import BOT_TOKEN, ADMIN_CHAT_ID, CHANNEL_URL, FLOOD_SECONDS
 from db import (
     init_db, get_last_sent_at, record_submission, get_suggestion_count,
     history_summary, list_submissions, get_submission, withdraw_submission,
@@ -88,21 +86,11 @@ async def setup_menu():
         BotCommand(command="adult", description="Материалы 18+"),
         BotCommand(command="my", description="Мои отправки"),
         BotCommand(command="cancel", description="Отменить ввод"),
-        BotCommand(command="app", description="Открыть Mini App"),
     ]
 
     await bot.set_my_commands(commands)
     await bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
-
-    if MINI_APP_URL:
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="Open App",
-                web_app=WebAppInfo(url=MINI_APP_URL),
-            )
-        )
-    else:
-        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
     await bot.set_my_description(description=DESCRIPTION)
     await bot.set_my_description(description=DESCRIPTION, language_code="ru")
@@ -208,21 +196,6 @@ async def show_history(message, user_id, offset=0):
 async def mine(message, state):
     await state.clear()
     await show_history(message, message.from_user.id)
-
-@dp.message(Command("app"), F.chat.type == ChatType.PRIVATE)
-async def miniapp(message, state):
-    await state.clear()
-
-    if not MINI_APP_URL:
-        await message.answer("Mini App пока не подключён.", reply_markup=main_keyboard())
-        return
-
-    await message.answer(
-        "Здесь можно посмотреть рейтинг и профиль:",
-        reply_markup=inline([
-            [InlineKeyboardButton(text="📱 Открыть Mini App", web_app=WebAppInfo(url=MINI_APP_URL))]
-        ]),
-    )
 
 async def combined(chat_id, source, prefix):
     is_text = source.text is not None
